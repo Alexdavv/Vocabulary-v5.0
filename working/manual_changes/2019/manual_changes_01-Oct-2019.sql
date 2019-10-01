@@ -81,3 +81,6 @@ insert into concept_relationship values(32702,32702,'Maps to',to_date ('19700101
 insert into concept_relationship values(32702,32702,'Mapped from',to_date ('19700101', 'YYYYMMDD'),to_date('20991231', 'YYYYMMDD'),null);
 insert into concept_relationship values(32703,32703,'Maps to',to_date ('19700101', 'YYYYMMDD'),to_date('20991231', 'YYYYMMDD'),null);
 insert into concept_relationship values(32703,32703,'Mapped from',to_date ('19700101', 'YYYYMMDD'),to_date('20991231', 'YYYYMMDD'),null);
+=======
+insert into concept_relationship values(32703,32703,'Mapped from',to_date ('19700101', 'YYYYMMDD'),to_date('20991231', 'YYYYMMDD'),null);
+>>>>>>> Create manual_changes_01-Oct-2019.sql
