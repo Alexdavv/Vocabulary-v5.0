@@ -20,7 +20,7 @@ BEGIN
         AND EXISTS (
                      SELECT 1
                      FROM (
-                            SELECT 1
+                            SELECT concepts1.invalid_reason
                             FROM (
 --taking invalid_reason of concept_code_2, first from the concept_stage, next from the concept (if concept doesn't exists in the concept_stage)
                             SELECT cs.concept_code, cs.vocabulary_id, cs.invalid_reason, 1 AS source_id
@@ -31,10 +31,10 @@ BEGIN
                             SELECT c.concept_code, c.vocabulary_id, c.invalid_reason, 2 AS source_id
                             FROM concept c
                             WHERE c.concept_code = crs.concept_code_2
-                                  AND c.vocabulary_id = crs.vocabulary_id_2) AS concepts
+                                  AND c.vocabulary_id = crs.vocabulary_id_2) AS concepts1
                             ORDER BY source_id FETCH FIRST 1 ROW ONLY
-                          ) AS concepts
-                     WHERE invalid_reason IN ('U', 'D')
+                          ) AS concepts2
+                     WHERE concepts2.invalid_reason IN ('U', 'D')
         );
 
 END;
