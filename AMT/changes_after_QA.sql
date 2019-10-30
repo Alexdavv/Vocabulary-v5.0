@@ -10,68 +10,114 @@ update drug_concept_stage set concept_name='Saudi pharmaceutical' where concept_
 update drug_concept_stage set concept_name='FBM-PHARMA' where concept_name='Fbm';
 */
 
-delete from drug_concept_stage where concept_code in (
-select a.concept_code from drug_concept_stage a left join  internal_relationship_stage b on a.concept_code = b.concept_code_2
-where a.concept_class_id= 'Brand Name' and b.concept_code_1 is null
-union all
-select a.concept_code from drug_concept_stage a left join  internal_relationship_stage b on a.concept_code = b.concept_code_2
-where a.concept_class_id= 'Dose Form' and b.concept_code_1 is null
-);
+DELETE
+FROM drug_concept_stage
+WHERE concept_code IN (
+                      SELECT a.concept_code
+                      FROM drug_concept_stage a
+                           LEFT JOIN internal_relationship_stage b
+                           ON a.concept_code = b.concept_code_2
+                      WHERE a.concept_class_id = 'Brand Name'
+                        AND b.concept_code_1 IS NULL
+                      UNION ALL
+                      SELECT a.concept_code
+                      FROM drug_concept_stage a
+                           LEFT JOIN internal_relationship_stage b
+                           ON a.concept_code = b.concept_code_2
+                      WHERE a.concept_class_id = 'Dose Form'
+                        AND b.concept_code_1 IS NULL
+                      );
 
 --updating ingredients that create duplicates after mapping to RxNorm
-drop table if exists ds_sum_2;
-create table ds_sum_2 as 
-with a as (
-SELECT distinct ds.drug_concept_code,ds.ingredient_concept_code,ds.box_size, ds.AMOUNT_VALUE,ds.AMOUNT_UNIT,ds.NUMERATOR_VALUE,ds.NUMERATOR_UNIT,ds.DENOMINATOR_VALUE,ds.DENOMINATOR_UNIT,rc.concept_id_2
-      FROM ds_stage ds
-        JOIN ds_stage ds2 ON ds.drug_concept_code = ds2.drug_concept_code AND ds.ingredient_concept_code != ds2.ingredient_concept_code
-        JOIN relationship_to_concept rc ON ds.ingredient_concept_code = rc.concept_code_1
-        JOIN relationship_to_concept rc2 ON ds2.ingredient_concept_code = rc2.concept_code_1
-            WHERE rc.concept_id_2 = rc2.concept_id_2
-            )
- select distinct DRUG_CONCEPT_CODE,max(INGREDIENT_CONCEPT_CODE)over (partition by DRUG_CONCEPT_CODE,concept_id_2) as ingredient_concept_code,box_size,
- sum(AMOUNT_VALUE) over (partition by DRUG_CONCEPT_CODE)as AMOUNT_VALUE,AMOUNT_UNIT,sum(NUMERATOR_VALUE) over (partition by DRUG_CONCEPT_CODE,concept_id_2)as NUMERATOR_VALUE,NUMERATOR_UNIT,DENOMINATOR_VALUE,DENOMINATOR_UNIT
- from a
- union
- select DRUG_CONCEPT_CODE,INGREDIENT_CONCEPT_CODE,box_size, null as AMOUNT_VALUE, null as AMOUNT_UNIT, null as NUMERATOR_VALUE, null as NUMERATOR_UNIT, null as DENOMINATOR_VALUE, null as DENOMINATOR_UNIT 
- from a where (drug_concept_code,ingredient_concept_code) 
- not in (select drug_concept_code, max(ingredient_concept_code) from a group by drug_concept_code);
+DROP TABLE IF EXISTS ds_sum_2;
+CREATE TABLE ds_sum_2 AS
+WITH
+    a AS (
+    SELECT DISTINCT ds.drug_concept_code, ds.ingredient_concept_code, ds.box_size, ds.AMOUNT_VALUE, ds.AMOUNT_UNIT,
+                    ds.NUMERATOR_VALUE, ds.NUMERATOR_UNIT, ds.DENOMINATOR_VALUE, ds.DENOMINATOR_UNIT, rc.concept_id_2
+    FROM ds_stage ds
+         JOIN ds_stage ds2
+         ON ds.drug_concept_code = ds2.drug_concept_code AND ds.ingredient_concept_code != ds2.ingredient_concept_code
+         JOIN relationship_to_concept rc
+         ON ds.ingredient_concept_code = rc.concept_code_1
+         JOIN relationship_to_concept rc2
+         ON ds2.ingredient_concept_code = rc2.concept_code_1
+    WHERE rc.concept_id_2 = rc2.concept_id_2
+    )
+SELECT DISTINCT DRUG_CONCEPT_CODE, max(INGREDIENT_CONCEPT_CODE)
+                                   OVER (PARTITION BY DRUG_CONCEPT_CODE,concept_id_2)   AS ingredient_concept_code,
+                box_size,
+                sum(AMOUNT_VALUE) OVER (PARTITION BY DRUG_CONCEPT_CODE)                 AS AMOUNT_VALUE, AMOUNT_UNIT,
+                sum(NUMERATOR_VALUE) OVER (PARTITION BY DRUG_CONCEPT_CODE,concept_id_2) AS NUMERATOR_VALUE,
+                NUMERATOR_UNIT, DENOMINATOR_VALUE, DENOMINATOR_UNIT
+FROM a
+UNION
+SELECT DRUG_CONCEPT_CODE, INGREDIENT_CONCEPT_CODE, box_size, NULL AS AMOUNT_VALUE, NULL AS AMOUNT_UNIT,
+       NULL                                                       AS NUMERATOR_VALUE, NULL AS NUMERATOR_UNIT,
+       NULL                                                       AS DENOMINATOR_VALUE, NULL AS DENOMINATOR_UNIT
+FROM a
+WHERE (drug_concept_code, ingredient_concept_code)
+          NOT IN (SELECT drug_concept_code, max(ingredient_concept_code) FROM a GROUP BY drug_concept_code);
 
-delete from ds_stage where  (drug_concept_code,ingredient_concept_code) in 
-(select drug_concept_code,ingredient_concept_code from ds_sum_2);
+DELETE
+FROM ds_stage
+WHERE (drug_concept_code, ingredient_concept_code) IN
+      (SELECT drug_concept_code, ingredient_concept_code FROM ds_sum_2);
 
-INSERT INTO DS_STAGE (DRUG_CONCEPT_CODE,INGREDIENT_CONCEPT_CODE,BOX_SIZE,AMOUNT_VALUE,AMOUNT_UNIT,NUMERATOR_VALUE,NUMERATOR_UNIT,DENOMINATOR_VALUE,DENOMINATOR_UNIT)
-SELECT distinct DRUG_CONCEPT_CODE,INGREDIENT_CONCEPT_CODE,BOX_SIZE,AMOUNT_VALUE,AMOUNT_UNIT,NUMERATOR_VALUE,NUMERATOR_UNIT,DENOMINATOR_VALUE,DENOMINATOR_UNIT
-FROM DS_SUM_2 where coalesce(AMOUNT_VALUE,NUMERATOR_VALUE) is not null;
+INSERT INTO DS_STAGE (DRUG_CONCEPT_CODE, INGREDIENT_CONCEPT_CODE, BOX_SIZE, AMOUNT_VALUE, AMOUNT_UNIT, NUMERATOR_VALUE,
+                      NUMERATOR_UNIT, DENOMINATOR_VALUE, DENOMINATOR_UNIT)
+SELECT DISTINCT DRUG_CONCEPT_CODE, INGREDIENT_CONCEPT_CODE, BOX_SIZE, AMOUNT_VALUE, AMOUNT_UNIT, NUMERATOR_VALUE,
+                NUMERATOR_UNIT, DENOMINATOR_VALUE, DENOMINATOR_UNIT
+FROM DS_SUM_2
+WHERE coalesce(AMOUNT_VALUE, NUMERATOR_VALUE) IS NOT NULL;
 
 --delete relationship to ingredients that we removed
-delete from internal_relationship_stage
-where (concept_code_1,concept_code_2) in (
-select drug_concept_code,ingredient_concept_code from ds_sum_2 where coalesce(AMOUNT_VALUE,NUMERATOR_VALUE) is null);
+DELETE
+FROM internal_relationship_stage
+WHERE (concept_code_1, concept_code_2) IN (
+                                          SELECT drug_concept_code, ingredient_concept_code
+                                          FROM ds_sum_2
+                                          WHERE coalesce(AMOUNT_VALUE, NUMERATOR_VALUE) IS NULL
+                                          );
 
 --deleting drug forms 
-DELETE from ds_stage WHERE drug_concept_code IN (SELECT drug_concept_code FROM ds_stage WHERE COALESCE(amount_value,numerator_value,0) = 0);
+DELETE
+FROM ds_stage
+WHERE drug_concept_code IN
+      (SELECT drug_concept_code FROM ds_stage WHERE COALESCE(amount_value, numerator_value, 0) = 0);
 
 --add water
-insert into ds_stage (drug_concept_code,ingredient_concept_code,numerator_value,numerator_unit,denominator_unit)
-select concept_code,'11295',1000 ,'Mg','Ml'
- from drug_concept_stage  dcs
-join (
-SELECT concept_code_1
-FROM internal_relationship_stage
-JOIN drug_concept_stage  ON concept_code_2 = concept_code  AND concept_class_id = 'Supplier'
-left join ds_stage on drug_concept_code = concept_code_1 
-where drug_concept_code is null
-union 
-SELECT concept_code_1
-FROM internal_relationship_stage
-JOIN drug_concept_stage  ON concept_code_2 = concept_code  AND concept_class_id = 'Supplier'
-where concept_code_1 not in (SELECT concept_code_1 FROM internal_relationship_stage JOIN drug_concept_stage   ON concept_code_2 = concept_code  AND concept_class_id = 'Dose Form')
-) s on s.concept_code_1 = dcs.concept_code
-where dcs.concept_class_id = 'Drug Product' and invalid_reason is null 
-and concept_name like 'Water%';
+INSERT INTO ds_stage (drug_concept_code, ingredient_concept_code, numerator_value, numerator_unit, denominator_unit)
+SELECT concept_code, '11295', 1000, 'Mg', 'Ml'
+FROM drug_concept_stage dcs
+     JOIN (
+          SELECT concept_code_1
+          FROM internal_relationship_stage
+               JOIN drug_concept_stage
+               ON concept_code_2 = concept_code AND concept_class_id = 'Supplier'
+               LEFT JOIN ds_stage
+               ON drug_concept_code = concept_code_1
+          WHERE drug_concept_code IS NULL
+          UNION
+          SELECT concept_code_1
+          FROM internal_relationship_stage
+               JOIN drug_concept_stage
+               ON concept_code_2 = concept_code AND concept_class_id = 'Supplier'
+          WHERE concept_code_1 NOT IN (
+                                      SELECT concept_code_1
+                                      FROM internal_relationship_stage
+                                           JOIN drug_concept_stage
+                                           ON concept_code_2 = concept_code AND concept_class_id = 'Dose Form'
+                                      )
+          ) s
+     ON s.concept_code_1 = dcs.concept_code
+WHERE dcs.concept_class_id = 'Drug Product'
+  AND invalid_reason IS NULL
+  AND concept_name LIKE 'Water%';
 
-insert into internal_relationship_stage 
-(concept_code_1,concept_code_2)
-select distinct drug_concept_code,ingredient_concept_code  from ds_stage where (drug_concept_code,ingredient_concept_code ) not in 
-(select concept_code_1,concept_code_2 from internal_relationship_stage);
+INSERT INTO internal_relationship_stage
+    (concept_code_1, concept_code_2)
+SELECT DISTINCT drug_concept_code, ingredient_concept_code
+FROM ds_stage
+WHERE (drug_concept_code, ingredient_concept_code) NOT IN
+      (SELECT concept_code_1, concept_code_2 FROM internal_relationship_stage);
