@@ -4,7 +4,7 @@ SELECT DISTINCT SOURCEID::text    AS drug_concept_code, DESTINATIONID AS ingredi
                 CASE
                     WHEN lower(a.concept_name) LIKE '%/each%' OR lower(a.concept_name) LIKE '%/application%' OR
                          lower(a.concept_name) LIKE '%/dose%' OR lower(a.concept_name) LIKE '%/square'
-                        THEN VALUE
+                        THEN c.VALUE
                     ELSE NULL END AS amount_value,
                 CASE
                     WHEN lower(a.concept_name) LIKE '%/each%' OR lower(a.concept_name) LIKE '%/application%' OR
@@ -33,7 +33,7 @@ FROM ds_0 c
      JOIN concept_stage_sn a
      ON a.concept_code = c.UNITID::text
      JOIN drug_concept_stage b
-     ON SOURCEID::text = b.concept_code
+     ON c.SOURCEID::text = b.concept_code
 ;
 UPDATE ds_0_1_1
 SET amount_value=NULL,

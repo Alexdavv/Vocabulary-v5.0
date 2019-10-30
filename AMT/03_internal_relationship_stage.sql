@@ -229,7 +229,7 @@ SELECT DISTINCT concept_code_1, concept_code
 FROM irs_upd;
 
 DELETE
-FROM from drug_concept_stage
+FROM drug_concept_stage
 WHERE concept_code IN ( --dose forms that dont relate to any drug
                       SELECT concept_code
                       FROM drug_concept_stage a

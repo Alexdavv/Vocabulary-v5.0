@@ -1,3 +1,16 @@
+DO
+$_$
+    BEGIN
+        PERFORM VOCABULARY_PACK.SetLatestUpdate(
+                        pVocabularyName => 'AMT',
+                        pVocabularyDate => (SELECT vocabulary_date FROM sources.product LIMIT 1),
+                        pVocabularyVersion => (SELECT vocabulary_version FROM sources.product LIMIT 1),
+                        pVocabularyDevSchema => 'DEV_AMT'
+                    );
+
+    END
+$_$;
+
 DROP TABLE IF EXISTS CONCEPT_STAGE_SN;
 CREATE TABLE CONCEPT_STAGE_SN
 (
@@ -271,7 +284,7 @@ FROM (
 WHERE rnc = 1;
 CREATE INDEX x_cc_2cd ON tmp_concept_class (concept_code);
 
---3. Create reduced set of classes 
+--3. Create reduced set of classes
 UPDATE concept_stage_sn cs
 SET concept_class_id = CASE
                            WHEN F7 = 'disorder'

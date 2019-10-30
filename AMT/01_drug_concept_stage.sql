@@ -45,64 +45,41 @@ CREATE TABLE supplier_2 AS
 SELECT DISTINCT supplier
 FROM supplier;
 INSERT INTO SUPPLIER_2 (SUPPLIER)
-VALUES ('Apo');
-INSERT INTO SUPPLIER_2 (SUPPLIER)
-VALUES ('Sun');
-INSERT INTO SUPPLIER_2 (SUPPLIER)
-VALUES ('David Craig');
-INSERT INTO SUPPLIER_2 (SUPPLIER)
-VALUES ('Parke Davis');
-INSERT INTO SUPPLIER_2 (SUPPLIER)
-VALUES ('Bioceuticals');
-INSERT INTO SUPPLIER_2 (SUPPLIER)
-VALUES ('Ipc');
-INSERT INTO SUPPLIER_2 (SUPPLIER)
-VALUES ('Rbx');
-INSERT INTO SUPPLIER_2 (SUPPLIER)
-VALUES ('Dakota');
-INSERT INTO SUPPLIER_2 (SUPPLIER)
-VALUES ('Dbl');
-INSERT INTO SUPPLIER_2 (SUPPLIER)
-VALUES ('Scp');
-INSERT INTO SUPPLIER_2 (SUPPLIER)
-VALUES ('Myx');
-INSERT INTO SUPPLIER_2 (SUPPLIER)
-VALUES ('Aft');
-INSERT INTO SUPPLIER_2 (SUPPLIER)
-VALUES ('Douglas');
-INSERT INTO SUPPLIER_2 (SUPPLIER)
-VALUES ('Omega');
-INSERT INTO SUPPLIER_2 (SUPPLIER)
-VALUES ('Bnm');
-INSERT INTO SUPPLIER_2 (SUPPLIER)
-VALUES ('Qv');
-INSERT INTO SUPPLIER_2 (SUPPLIER)
-VALUES ('Gxp');
-INSERT INTO SUPPLIER_2 (SUPPLIER)
-VALUES ('Fbm');
-INSERT INTO SUPPLIER_2 (SUPPLIER)
-VALUES ('Drla');
-INSERT INTO SUPPLIER_2 (SUPPLIER)
-VALUES ('Csl');
-INSERT INTO SUPPLIER_2 (SUPPLIER)
-VALUES ('Briemar');
-INSERT INTO SUPPLIER_2 (SUPPLIER)
-VALUES ('Nature''S Way');
-INSERT INTO SUPPLIER_2 (SUPPLIER)
-VALUES ('Sau');
-INSERT INTO SUPPLIER_2 (SUPPLIER)
-VALUES ('Drx');
+VALUES ('Apo'),
+       ('Sun'),
+       ('David Craig'),
+       ('Parke Davis'),
+       ('Bioceuticals'),
+       ('Ipc'),
+       ('Rbx'),
+       ('Dakota'),
+       ('Dbl'),
+       ('Scp'),
+       ('Myx'),
+       ('Aft'),
+       ('Douglas'),
+       ('Omega'),
+       ('Bnm'),
+       ('Qv'),
+       ('Gxp'),
+       ('Fbm'),
+       ('Drla'),
+       ('Csl'),
+       ('Briemar'),
+       ('Nature''S Way'),
+       ('Sau'),
+       ('Drx');
 
 ALTER TABLE supplier_2
     ADD concept_code varchar(255);
 
---using old codes from previous runs that have OMOP-codes 
+--using old codes from previous runs that have OMOP-codes
 UPDATE supplier_2 s2
 SET concept_code=i.concept_code
 FROM (
      SELECT concept_code, concept_name FROM devv5.concept WHERE concept_class_id = 'Supplier' AND vocabulary_id = 'AMT'
      ) i
-WHERE i.concept_name = s2.supplier
+WHERE i.concept_name = s2.supplier;
 
 UPDATE supplier_2
 SET concept_code=(
@@ -195,10 +172,10 @@ WHERE concept_code IS NULL;
 --creating first table for drug_strength
 DROP TABLE IF EXISTS ds_0;
 CREATE TABLE ds_0 AS
-SELECT sourceid, destinationid, UNITID, VALUE
+SELECT DISTINCT b.sourceid, b.destinationid, a.unitid, a.value
 FROM sources.amt_rf2_ss_strength_refset a
-     JOIN sources.amt_sct2_rela_full_au b
-     ON referencedComponentId = b.id
+     JOIN sources.amt_rf2_full_relationships b
+     ON a.referencedComponentId = b.id
 ;
 
 -- parse units as they looks like 'mg/ml' etc.
@@ -224,7 +201,7 @@ DROP TABLE IF EXISTS form;
 CREATE TABLE form AS
 SELECT DISTINCT a.CONCEPT_NAME, 'Dose Form' AS NEW_CONCEPT_CLASS_ID, a.CONCEPT_CODE, a.CONCEPT_CLASS_ID
 FROM concept_stage_sn a
-     JOIN sources.amt_sct2_rela_full_au b
+     JOIN sources.amt_rf2_full_relationships b
      ON a.concept_code = b.sourceid::text
      JOIN concept_stage_sn c
      ON c.concept_Code = destinationid::text
@@ -304,7 +281,7 @@ SET CONCEPT_NAME = 'Panadol Children''s 5 to 12 Years'
 WHERE CONCEPT_NAME = 'Panadol Children''s Elixir 5 to 12 Years';
 
 UPDATE dcs_bn
-SET concept_name=regexp_replace(concept_name, '\(Day\)|\(Night\)|(Day and Night)$|(Day$)');
+SET concept_name=regexp_replace(concept_name, '\(Day\)|\(Night\)|(Day and Night)$|(Day$)', '', 'g');
 
 UPDATE dcs_bn
 SET concept_name=trim(replace(regexp_replace(concept_name, '\d+|\.|%|\smg\s|\smg$|\sIU\s|\sIU$', '', 'g'), '  ', ' '))
@@ -370,155 +347,59 @@ WHERE CONCEPT_CODE IN
 ;
 
 DELETE
-FROM DCS_BN
-WHERE CONCEPT_NAME = 'Alendronate with Colecalciferol';
-DELETE
-FROM DCS_BN
-WHERE CONCEPT_NAME = 'Aluminium Acetate BP';
-DELETE
-FROM DCS_BN
-WHERE CONCEPT_NAME = 'Aluminium Acetate Aqueous APF';
-DELETE
-FROM DCS_BN
-WHERE CONCEPT_NAME = 'Analgesic Calmative';
-DELETE
-FROM DCS_BN
-WHERE CONCEPT_NAME = 'Analgesic and Calmative';
-DELETE
-FROM DCS_BN
-WHERE CONCEPT_NAME = 'Antiseptic';
-DELETE
-FROM DCS_BN
-WHERE CONCEPT_NAME = 'Betadine Antiseptic';
-DELETE
-FROM DCS_BN
-WHERE CONCEPT_NAME = 'Calamine Oily';
-DELETE
-FROM DCS_BN
-WHERE CONCEPT_NAME = 'Calamine Aqueous';
-DELETE
-FROM DCS_BN
-WHERE CONCEPT_NAME = 'Cepacaine Oral Solution';
-DELETE
-FROM DCS_BN
-WHERE CONCEPT_NAME = 'Clotrimazole Antifungal';
-DELETE
-FROM DCS_BN
-WHERE CONCEPT_NAME = 'Clotrimazole Anti-Fungal';
-DELETE
-FROM DCS_BN
-WHERE CONCEPT_NAME = 'Cocaine Hydrochloride and Adrenaline Acid Tartrate APF';
-DELETE
-FROM DCS_BN
-WHERE CONCEPT_NAME = 'Codeine Phosphate Linctus APF';
-DELETE
-FROM DCS_BN
-WHERE CONCEPT_NAME = 'Combantrin-1 with Mebendazole';
-DELETE
-FROM DCS_BN
-WHERE CONCEPT_NAME = 'Cough Suppressant';
-DELETE
-FROM DCS_BN
-WHERE CONCEPT_NAME = 'Decongestant Medicine';
-DELETE
-FROM DCS_BN
-WHERE CONCEPT_NAME = 'Dermatitis and Psoriasis Relief';
-DELETE
-FROM DCS_BN
-WHERE CONCEPT_NAME = 'Dexamphetamine Sulfate';
-DELETE
-FROM DCS_BN
-WHERE CONCEPT_NAME = 'Diclofenac Sodium Anti-Inflammatory Pain Relief';
-DELETE
-FROM DCS_BN
-WHERE CONCEPT_NAME = 'Disinfectant Hand Rub';
-DELETE
-FROM DCS_BN
-WHERE CONCEPT_NAME = 'Emulsifying Ointment BP';
-DELETE
-FROM DCS_BN
-WHERE CONCEPT_NAME = 'Epsom Salts';
-DELETE
-FROM DCS_BN
-WHERE CONCEPT_NAME = 'Esomeprazole Hp';
-DELETE
-FROM DCS_BN
-WHERE CONCEPT_NAME = 'Gentian Alkaline Mixture BP';
-DELETE
-FROM DCS_BN
-WHERE CONCEPT_NAME = 'Homatropine Hydrobromide and Cocaine Hydrochloride APF';
-DELETE
-FROM DCS_BN
-WHERE CONCEPT_NAME = 'Hypurin Isophane';
-DELETE
-FROM DCS_BN
-WHERE CONCEPT_NAME = 'Ibuprofen and Codeine';
-DELETE
-FROM DCS_BN
-WHERE CONCEPT_NAME = 'Ipecacuanha Syrup';
-DELETE
-FROM DCS_BN
-WHERE CONCEPT_NAME = 'Kaolin Mixture BPC';
-DELETE
-FROM DCS_BN
-WHERE CONCEPT_NAME = 'Kaolin and Opium Mixture APF';
-DELETE
-FROM DCS_BN
-WHERE CONCEPT_NAME = 'Lamivudine and Zidovudine';
-DELETE
-FROM DCS_BN
-WHERE CONCEPT_NAME = 'Laxative with Senna';
-DELETE
-FROM DCS_BN
-WHERE CONCEPT_NAME = 'Magnesium Trisilicate Mixture BPC';
-DELETE
-FROM DCS_BN
-WHERE CONCEPT_NAME = 'Magnesium Trisilicate and Belladonna Mixture BPC';
-DELETE
-FROM DCS_BN
-WHERE CONCEPT_NAME = 'Menthol and Eucalyptus BP';
-DELETE
-FROM DCS_BN
-WHERE CONCEPT_NAME = 'Mentholaire Vaporizer Fluid';
-DELETE
-FROM DCS_BN
-WHERE CONCEPT_NAME = 'Methylated Spirit Specially';
-DELETE
-FROM DCS_BN
-WHERE CONCEPT_NAME = 'Nasal Decongestant';
-DELETE
-FROM DCS_BN
-WHERE CONCEPT_NAME = 'Natural Laxative with Softener';
-DELETE
-FROM DCS_BN
-WHERE CONCEPT_NAME = 'Paraffin Soft White BP';
-DELETE
-FROM DCS_BN
-WHERE CONCEPT_NAME = 'Perindopril and Indapamide';
-DELETE
-FROM DCS_BN
-WHERE CONCEPT_NAME = 'Pholcodine Linctus APF';
-DELETE
-FROM DCS_BN
-WHERE CONCEPT_NAME = 'Rh(D) Immunoglobulin-VF';
-DELETE
-FROM DCS_BN
-WHERE CONCEPT_NAME = 'Ringer-Lactate';
-DELETE
-FROM DCS_BN
-WHERE CONCEPT_NAME = 'Sodium Bicarbonate BP';
-DELETE
-FROM DCS_BN
-WHERE CONCEPT_NAME = 'Sodium Bicarbonate APF';
-DELETE
-FROM DCS_BN
-WHERE CONCEPT_NAME = 'Zinc, Starch and Talc Dusting Powder BPC';
-DELETE
-FROM DCS_BN
-WHERE CONCEPT_NAME = 'Zinc, Starch and Talc Dusting Powder APF';
-DELETE
-FROM DCS_BN
-WHERE CONCEPT_NAME = 'Zinc Paste APF';
+FROM dcs_bn
+WHERE concept_name IN ('Alendronate with Colecalciferol',
+                       'Aluminium Acetate BP',
+                       'Aluminium Acetate Aqueous APF',
+                       'Analgesic Calmative',
+                       'Analgesic and Calmative',
+                       'Antiseptic',
+                       'Betadine Antiseptic',
+                       'Calamine Oily',
+                       'Calamine Aqueous',
+                       'Cepacaine Oral Solution',
+                       'Clotrimazole Antifungal',
+                       'Clotrimazole Anti-Fungal',
+                       'Cocaine Hydrochloride and Adrenaline Acid Tartrate APF',
+                       'Codeine Phosphate Linctus APF',
+                       'Combantrin-1 with Mebendazole',
+                       'Cough Suppressant',
+                       'Decongestant Medicine',
+                       'Dermatitis and Psoriasis Relief',
+                       'Dexamphetamine Sulfate',
+                       'Diclofenac Sodium Anti-Inflammatory Pain Relief',
+                       'Disinfectant Hand Rub',
+                       'Emulsifying Ointment BP',
+                       'Epsom Salts',
+                       'Esomeprazole Hp',
+                       'Gentian Alkaline Mixture BP',
+                       'Homatropine Hydrobromide and Cocaine Hydrochloride APF',
+                       'Hypurin Isophane',
+                       'Ibuprofen and Codeine',
+                       'Ipecacuanha Syrup',
+                       'Kaolin Mixture BPC',
+                       'Kaolin and Opium Mixture APF',
+                       'Lamivudine and Zidovudine',
+                       'Laxative with Senna',
+                       'Magnesium Trisilicate Mixture BPC',
+                       'Magnesium Trisilicate and Belladonna Mixture BPC',
+                       'Menthol and Eucalyptus BP',
+                       'Mentholaire Vaporizer Fluid',
+                       'Methylated Spirit Specially',
+                       'Nasal Decongestant',
+                       'Natural Laxative with Softener',
+                       'Paraffin Soft White BP',
+                       'Perindopril and Indapamide',
+                       'Pholcodine Linctus APF',
+                       'Rh(D) Immunoglobulin-VF',
+                       'Ringer-Lactate',
+                       'Sodium Bicarbonate BP',
+                       'Sodium Bicarbonate APF',
+                       'Zinc, Starch and Talc Dusting Powder BPC',
+                       'Zinc, Starch and Talc Dusting Powder APF',
+                       'Zinc Paste APF');
+
+
 UPDATE DCS_BN
 SET CONCEPT_NAME = 'Abbocillin VK'
 WHERE CONCEPT_NAME = 'Abbocillin VK Filmtab';
@@ -968,7 +849,7 @@ FROM drug_concept_stage --delete containers
 WHERE concept_code IN (
                       SELECT destinationid::text
                       FROM concept_stage_sn a
-                           JOIN sources.amt_sct2_rela_full_au b
+                           JOIN sources.amt_rf2_full_relationships b
                            ON destinationid::text = a.concept_code
                            JOIN concept_stage_sn c
                            ON c.concept_code = sourceid::text
