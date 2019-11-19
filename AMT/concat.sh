@@ -1,4 +1,5 @@
-cat "SNOMED-AU_conversion.sql" > load_stage.sql
+cat "set_latest_updates.sql" > load_stage.sql
+cat "SNOMED-AU_conversion.sql" >> load_stage.sql
 cat "00_non_drug.sql" >> load_stage.sql
 cat "01_drug_concept_stage.sql" >> load_stage.sql
 cat "02_ds_stage.sql" >> load_stage.sql

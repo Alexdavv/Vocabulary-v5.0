@@ -6,45 +6,34 @@ WHERE concept_class_id IN ('Trade Product Unit', 'Trade Product Pack', 'Containe
   AND substring(concept_name, '\((.*)\)') IS NOT NULL
   AND NOT substring(concept_name, '\((.*)\)') ~ '[0-9]'
   AND NOT substring(concept_name, '\((.*)\)') ~
-          'blood|virus|inert|capsule|vaccine|D|accidental|CSL|paraffin|once|extemporaneous|long chain|perindopril|triglycerides|Night Tablet'
+          'blood|virus|inert|[Cc]apsule|vaccine|D|accidental|CSL|paraffin|once|extemporaneous|long chain|perindopril|triglycerides|Night Tablet'
   AND length(substring(concept_name, '\(.*\)')) > 5
-  AND substring(lower(concept_name), '\((.*)\)') != 'night'
-  AND substring(lower(concept_name), '\((.*)\)') != 'capsule';
+  AND substring(lower(concept_name), '\((.*)\)') != 'night';
 
 UPDATE supplier
 SET supplier=regexp_replace(supplier, 'Night\s', '', 'g')
 WHERE supplier LIKE '%Night%';
-UPDATE supplier
-SET supplier=regexp_replace(supplier, 'Night\s', '', 'g')
-WHERE supplier LIKE '%Night%';
-UPDATE SUPPLIER
-SET SUPPLIER = 'Pfizer'
-WHERE SUPPLIER = 'Pfizer Perth';
-UPDATE SUPPLIER
-SET SUPPLIER = 'Sanofi'
-WHERE SUPPLIER LIKE '%Sanofi%';
-UPDATE SUPPLIER
-SET SUPPLIER = 'B Braun'
-WHERE SUPPLIER LIKE '%B Braun%';
-UPDATE SUPPLIER
-SET SUPPLIER = 'Fresenius Kabi'
-WHERE SUPPLIER LIKE '%Fresenius Kabi%';
-UPDATE SUPPLIER
-SET SUPPLIER = 'Baxter'
-WHERE SUPPLIER LIKE '%Baxter%';
-UPDATE SUPPLIER
-SET SUPPLIER = 'Priceline'
-WHERE SUPPLIER LIKE '%Priceline%';
-UPDATE SUPPLIER
-SET SUPPLIER = 'Pharmacist'
-WHERE SUPPLIER LIKE '%Pharmacist%';
+
+UPDATE supplier s
+SET supplier = v.supplier_new
+FROM (
+     VALUES ('%Pfizer%', 'Pfizer'),
+            ('%Sanofi%', 'Sanofi'),
+            ('%B Braun%', 'B Braun'),
+            ('%Fresenius Kabi%', 'Fresenius Kabi'),
+            ('%Baxter%', 'Baxter'),
+            ('%Priceline%', 'Priceline'),
+            ('%Pharmacist%', 'Pharmacist')
+     ) AS v (supplier_old, supplier_new)
+WHERE s.supplier LIKE v.supplier_old;
+
 
 --add suppliers with abbreviations
 DROP TABLE IF EXISTS supplier_2;
 CREATE TABLE supplier_2 AS
 SELECT DISTINCT supplier
 FROM supplier;
-INSERT INTO SUPPLIER_2 (SUPPLIER)
+INSERT INTO supplier_2 (supplier)
 VALUES ('Apo'),
        ('Sun'),
        ('David Craig'),
@@ -77,7 +66,10 @@ ALTER TABLE supplier_2
 UPDATE supplier_2 s2
 SET concept_code=i.concept_code
 FROM (
-     SELECT concept_code, concept_name FROM devv5.concept WHERE concept_class_id = 'Supplier' AND vocabulary_id = 'AMT'
+     SELECT concept_code, concept_name
+     FROM devv5.concept
+     WHERE concept_class_id = 'Supplier'
+       AND vocabulary_id = 'AMT'
      ) i
 WHERE i.concept_name = s2.supplier;
 
@@ -91,6 +83,7 @@ SET concept_code=(
                  ),
     supplier='IPC'
 WHERE supplier = 'Ipc';
+
 UPDATE supplier_2
 SET concept_code=(
                  SELECT DISTINCT concept_code
@@ -100,6 +93,7 @@ SET concept_code=(
                    AND concept_name = 'Sun'
                  )
 WHERE supplier = 'Sun';
+
 UPDATE supplier_2
 SET concept_code=(
                  SELECT DISTINCT concept_code
@@ -110,6 +104,7 @@ SET concept_code=(
                  ),
     supplier='Boucher & Muir'
 WHERE supplier = 'Bnm';
+
 UPDATE supplier_2
 SET concept_code=(
                  SELECT DISTINCT concept_code
@@ -120,6 +115,7 @@ SET concept_code=(
                  ),
     supplier='GXP'
 WHERE supplier = 'Gxp';
+
 UPDATE supplier_2
 SET concept_code=(
                  SELECT DISTINCT concept_code
@@ -130,6 +126,7 @@ SET concept_code=(
                  ),
     supplier='FBM'
 WHERE supplier = 'Fbm';
+
 UPDATE supplier_2
 SET concept_code=(
                  SELECT DISTINCT concept_code
@@ -139,6 +136,7 @@ SET concept_code=(
                    AND concept_name = 'Douglas'
                  )
 WHERE supplier = 'Douglas';
+
 UPDATE supplier_2
 SET concept_code=(
                  SELECT DISTINCT concept_code
@@ -149,6 +147,7 @@ SET concept_code=(
                  ),
     supplier='DRX'
 WHERE supplier = 'Drx';
+
 UPDATE supplier_2
 SET concept_code=(
                  SELECT DISTINCT concept_code
@@ -159,6 +158,7 @@ SET concept_code=(
                  ),
     supplier='Saudi'
 WHERE supplier = 'Sau';
+
 /*
 drop sequence if exists new_voc;
 create sequence new_voc start with 528823;
@@ -172,10 +172,10 @@ WHERE concept_code IS NULL;
 --creating first table for drug_strength
 DROP TABLE IF EXISTS ds_0;
 CREATE TABLE ds_0 AS
-SELECT DISTINCT b.sourceid, b.destinationid, a.unitid, a.value
-FROM sources.amt_rf2_ss_strength_refset a
-     JOIN sources.amt_rf2_full_relationships b
-     ON a.referencedComponentId = b.id
+SELECT DISTINCT rel.sourceid, rel.destinationid, str.unitid, str.value
+FROM sources.amt_rf2_ss_strength_refset str
+     JOIN sources.amt_rf2_full_relationships rel
+     ON str.referencedComponentId = rel.id
 ;
 
 -- parse units as they looks like 'mg/ml' etc.
@@ -187,24 +187,25 @@ SELECT concept_name,
        concept_name AS concept_code,
        unitid
 FROM (
-     SELECT DISTINCT UNNEST(regexp_matches(regexp_replace(b.concept_name, '(/)(unit|each|application|dose)', '', 'g'),
-                                           '[^/]+', 'g')) concept_name,
-                     'Unit' AS                            new_concept_class_id,
-                     concept_class_id,
-                     unitid
-     FROM ds_0 a
-          JOIN concept_stage_sn b
-          ON a.unitid::TEXT = b.concept_code
+     SELECT DISTINCT
+         UNNEST(regexp_matches(regexp_replace(cs.concept_name, '(/)(unit|each|application|dose)', '', 'g'),
+                               '[^/]+', 'g')) concept_name,
+         'Unit' AS                            new_concept_class_id,
+         cs.concept_class_id,
+         ds.unitid
+     FROM ds_0 ds
+          JOIN concept_stage_sn cs
+          ON ds.unitid::TEXT = cs.concept_code
      ) AS s0;
 
 DROP TABLE IF EXISTS form;
 CREATE TABLE form AS
-SELECT DISTINCT a.CONCEPT_NAME, 'Dose Form' AS NEW_CONCEPT_CLASS_ID, a.CONCEPT_CODE, a.CONCEPT_CLASS_ID
+SELECT DISTINCT a.concept_name, 'Dose Form' AS new_concept_class_id, a.concept_code, a.concept_class_id
 FROM concept_stage_sn a
      JOIN sources.amt_rf2_full_relationships b
      ON a.concept_code = b.sourceid::text
      JOIN concept_stage_sn c
-     ON c.concept_Code = destinationid::text
+     ON c.concept_code = destinationid::text
 WHERE a.concept_class_id = 'AU Qualifier'
   AND a.concept_code NOT IN
       (
@@ -213,7 +214,7 @@ WHERE a.concept_class_id = 'AU Qualifier'
            JOIN sources.amt_rf2_full_relationships b
            ON a.concept_code = b.sourceid::text
            JOIN concept_stage_sn c
-           ON c.concept_Code = destinationid::text
+           ON c.concept_code = destinationid::text
       WHERE a.concept_class_id = 'AU Qualifier'
         AND initcap(c.concept_name) IN
             ('Area Unit Of Measure', 'Biological Unit Of Measure', 'Composite Unit Of Measure',
@@ -232,19 +233,25 @@ WHERE CONCEPT_CLASS_ID = 'Trade Product';
 UPDATE dcs_bn
 SET concept_name=regexp_replace(concept_name, '\d+(\.\d+)?(\s\w+)?/\d+\s\w+$', '', 'g')
 WHERE concept_name ~ '\d+(\s\w+)?/\d+\s\w+$';
+
 UPDATE dcs_bn
 SET concept_name=regexp_replace(concept_name, '\d+(\.\d+)?(\s\w+)?/\d+\s\w+$', '', 'g')
 WHERE concept_name ~ '\d+(\s\w+)?/\d+\s\w+$';
+
 UPDATE dcs_bn
 SET concept_name=regexp_replace(concept_name, '(\d+/)?(\d+\.)?\d+/\d+(\.\d+)?$', '', 'g')
 WHERE concept_name ~ '(\d+/)?(\d+\.)?\d+/\d+(\.\d+)?$'
   AND NOT concept_name ~ '-(\d+\.)?\d+/\d+$';
+
 UPDATE dcs_bn
 SET concept_name=regexp_replace(concept_name, '\d+(\.\d+)?/\d+(\.\d+)?(\s)?\w+$', '', 'g')
 WHERE concept_name ~ '\d+(\.\d+)?/\d+(\.\d+)?(\s)?\w+$';
+
 UPDATE dcs_bn
 SET concept_name=regexp_replace(concept_name, '\d+(\.\d+)?(\s)?(\w+)?(\s\w+)?/\d+(\.\d+)?(\s)?\w+$', '', 'g')
 WHERE concept_name ~ '\d+(\.\d+)?(\s)?(\w+)?(\s\w+)?/\d+(\.\d+)?(\s)?\w+$';
+
+
 UPDATE dcs_bn
 SET concept_name='Biostate'
 WHERE concept_name LIKE '%Biostate%';
@@ -257,44 +264,170 @@ WHERE concept_name LIKE '%Xylocaine%';
 UPDATE dcs_bn
 SET concept_name='Canesten'
 WHERE concept_name LIKE '%Canesten%';
+
+
+UPDATE dcs_bn dcs
+SET concept_name = v.concept_name_new
+FROM (
+     VALUES ('Paracetamol Infant''s Drops', 'Paracetamol Infant Drops'),
+            ('Panadol Children''s 5 Years to 12 Years', 'Panadol Children''s 5 to 12 Years'),
+            ('Panadol Children''s Elixir 1 to 5 Years', 'Panadol Children''s 1 to 5 Years'),
+            ('Panadol Children''s Elixir 5 to 12 Years', 'Panadol Children''s 5 to 12 Years'),
+            ('Abbocillin VK Filmtab', 'Abbocillin VK'),
+            ('Acnederm Foaming Wash', 'Acnederm'),
+            ('Actacode Linctus', 'Actacode'),
+            ('Allersoothe Elixir', 'Allersoothe'),
+            ('Amoxil Paediatric Drops', 'Amoxil'),
+            ('Avelox IV', 'Avelox'),
+            ('B-Dose IV', 'B-Dose'),
+            ('Beconase Allergy and Hayfever Hour', 'Beconase'),
+            ('Benzac AC Wash', 'Benzac AC'),
+            ('Bepanthen Antiseptic', 'Bepanthen'),
+            ('Cepacol Antibacterial', 'Cepacol'),
+            ('Cepacol Antibacterial Menthol and Eucalyptus', 'Cepacol'),
+            ('Citanest with Adrenaline in Dental', 'Citanest Dental'),
+            ('Citanest with Octapressin Dental', 'Citanest Dental'),
+            ('Colifoam Rectal Foam', 'Colifoam'),
+            ('Coloxyl Drops', 'Coloxyl'),
+            ('Coloxyl with Senna', 'Coloxyl'),
+            ('Cordarone X Intravenous', 'Cordarone X'),
+            ('Daktarin Tincture', 'Daktarin'),
+            ('Demazin Cold Relief Paediatric Oral Drops', 'Demazin Cold Relief Paediatric'),
+            ('Demazin Cold Relief Syrup', 'Demazin Cold Relief'),
+            ('Demazin Decongestant Paediatric', 'Demazin Paediatric'),
+            ('Dermaveen Moisturising', 'Dermaveen'),
+            ('Dermaveen Shower & Bath Oil', 'Dermaveen'),
+            ('Dermaveen Soap Free Wash', 'Dermaveen'),
+            ('Dettol Antiseptic Cream', 'Dettol'),
+            ('Dettol Antiseptic Liquid', 'Dettol'),
+            ('Dettol Wound Wash', 'Dettol'),
+            ('Difflam Anaesthetic, Antibacterial and Anti-Inflammatory', 'Difflam'),
+            ('Difflam Anti-Inflammatory Lozenge', 'Difflam'),
+            ('Difflam Anti-Inflammatory Solution', 'Difflam'),
+            ('Difflam Anti-Inflammatory Throat', 'Difflam'),
+            ('Difflam Cough Lozenge', 'Difflam'),
+            ('Difflam Extra Strength', 'Difflam Exrta Strength'),
+            ('Difflam Lozenge', 'Difflam'),
+            ('Difflam Mouth', 'Difflam'),
+            ('Difflam Sore Throat Gargle with Iodine Concentrate', 'Difflam'),
+            ('Difflam-C Anti-Inflammatory Antiseptic', 'Difflam-C'),
+            ('Dimetapp Chesty Cough Elixir', 'Dimetapp Chesty Cough'),
+            ('Dimetapp Cold and Allergy Elixir', 'Dimetapp Cold and Allergy'),
+            ('Dimetapp Cold and Allergy Extra Strength Drops', 'Dimetapp Cold and Allergy Extra Strength'),
+            ('Dimetapp Cold and Flu Day Relief Liquid Cap', 'Dimetapp Cold and Flu Day Relief'),
+            ('Dimetapp Cold and Flu Night Relief Liquid Cap', 'Dimetapp Cold and Flu Night Relief'),
+            ('Dimetapp DM Cough and Cold Drops', 'Dimetapp DM Cough and Cold'),
+            ('Dimetapp DM Cough and Cold Elixir', 'Dimetapp DM Cough and Cold'),
+            ('Donnalix Infant Drops', 'Donnalix Infant'),
+            ('Drixine Decongestant', 'Drixine'),
+            ('Drixine Metered Pump Decongestant', 'Drixine'),
+            ('Dry Tickly Cough Medicine', 'Dry Tickly Cough'),
+            ('Dry Tickly Cough Mixture', 'Dry Tickly Cough'),
+            ('Dulcolax SP Drops', 'Dulcolax SP'),
+            ('Duro-Tuss Chesty Cough Liquid Forte', 'Duro-Tuss Chesty Cough Forte'),
+            ('Duro-Tuss Chesty Cough Liquid plus Nasal Decongestant', 'Duro-Tuss Chesty Cough plus Nasal Decongestant'),
+            ('Duro-Tuss Chesty Cough Liquid Regular', 'Duro-Tuss Chesty Cough'),
+            ('Duro-Tuss Chesty Cough Lozenge', 'Duro-Tuss Chesty Cough'),
+            ('Duro-Tuss Cough Liquid Expectorant', 'Duro-Tuss Cough'),
+            ('Duro-Tuss Dry Cough Liquid plus Nasal Decongestant', 'Duro-Tuss Dry Cough plus Nasal Decongestant'),
+            ('Duro-Tuss Dry Cough Liquid Regular', 'Duro-Tuss Dry Cough'),
+            ('Duro-Tuss Dry Cough Lozenge', 'Duro-Tuss Dry Cough'),
+            ('Emend IV', 'Emend'),
+            ('Epilim Syrup', 'Epilim'),
+            ('Eulactol Antifungal', 'Eulactol'),
+            ('Febridol Infant Drops', 'Febridol Infant'),
+            ('Fludara IV', 'Fludara'),
+            ('Fucidin IV', 'Fucidin'),
+            ('Idaprex Arg', 'Idaprex'),
+            ('Imodium Caplet', 'Imodium'),
+            ('Imogam Rabies Pasteurised', 'Imogam'),
+            ('Lanoxin Paediatric Elixir', 'Lanoxin Paediatric'),
+            ('Lemsip Cold and Flu Liquid Capsule', 'Lemsip Cold and Flu'),
+            ('Lorastyne Syrup', 'Lorastyne'),
+            ('Lucrin Depot -Month', 'Lucrin Depot'),
+            ('Marcain Spinal Heavy', 'Marcain Spinal'),
+            ('Marcain with Adrenaline in Dental', 'Marcain Dental'),
+            ('Merieux Inactivated Rabies Vaccine', 'Merieux'),
+            ('Mersyndol Caplet', 'Mersyndol'),
+            ('MS Contin Suspension', 'MS Contin'),
+            ('Mycil Healthy Feet Tinea Cream', 'Mycil Healthy Feet Tinea'),
+            ('Mycil Healthy Feet Tinea Powder', 'Mycil Healthy Feet Tinea'),
+            ('Nasonex Aqueous', 'Nasonex'),
+            ('Neutrogena T/Gel Therapeutic Plus Shampoo', 'Neutrogena T/Gel Therapeutic Plus'),
+            ('Neutrogena T/Gel Therapeutic Shampoo', 'Neutrogena T/Gel Therapeutic'),
+            ('Nexium Hp', 'Nexium HP'),
+            ('Nexium IV', 'Nexium'),
+            ('Nucosef Syrup', 'Nucosef'),
+            ('Nupentin Tab', 'Nupentin'),
+            ('Nurocain with Adrenaline in Dental', 'Nurocain Dental'),
+            ('Nurofen Caplet', 'Nurofen'),
+            ('Nurofen Liquid Capsule', 'Nurofen'),
+            ('Nurofen Zavance Liquid Capsule', 'Nurofen Zavance'),
+            ('Panadol Caplet', 'Panadol'),
+            ('Panadol Caplet Optizorb', 'Panadol Optizorb'),
+            ('Panadol Gel Cap', 'Panadol Gel'),
+            ('Panadol Gel Tab', 'Panadol Gel'),
+            ('Panadol Mini Cap', 'Panadol'),
+            ('Panadol Sinus PE Night and Day Caplet', 'Panadol Sinus PE Night and Day'),
+            ('Panafen IB Mini Cap', 'Panafen IB'),
+            ('Paracetamol Children''s Drops', 'Paracetamol Children''s'),
+            ('Paracetamol Children''s Drops 1 Month to 2 Years', 'Paracetamol Children''s 1 Month to 2 Years'),
+            ('Paracetamol Children''s Elixir 1 to 5 Years', 'Paracetamol Children''s 1 to 5 Years'),
+            ('Paracetamol Children''s Elixir 5 to 12 Years', 'Paracetamol Children''s 5 to 12 Years'),
+            ('Paracetamol Children''s Infant Drops 1 Month to 2 Years', 'Paracetamol Children''s 1 Month to 2 Years'),
+            ('Paracetamol Children''s Syrup 1 to 5 Years', 'Paracetamol Children''s 1 to 5 Years'),
+            ('Paracetamol Drops Infants and Children 1 Month to 2 Years',
+             'Paracetamol Infant and Children 1 Month to 2 Years'),
+            ('Paracetamol Extra Tabsule', 'Paracetamol Extra'),
+            ('Paracetamol Infant and Children''s Drops 1 Month to 4 Years',
+             'Paracetamol Infant and Children 1 Month to 4 Years'),
+            ('Paracetamol Infant Drops', 'Paracetamol Infant'),
+            ('Paracetamol Pain and Fever Drops 1 Month to 2 Years', 'Paracetamol Pain and Fever 1 Month to 2 Years'),
+            ('Paralgin Tabsule', 'Paralgin'),
+            ('Penta-vite Multivitamins with Iron for Kids 1 to 12 Years', 'Penta-vite'),
+            ('Pholtrate Linctus', 'Pholtrate'),
+            ('Polaramine Syrup', 'Polaramine'),
+            ('Prefrin Liquifilm', 'Prefrin'),
+            ('Proctosedyl Rectal', 'Proctosedyl'),
+            ('Rhinocort Aqueous', 'Rhinocort'),
+            ('Rynacrom Metered Dose', 'Rynacrom'),
+            ('Sandoglobulin NF Liquid', 'Sandoglobulin NF'),
+            ('Savlon Antiseptic Powder', 'Savlon'),
+            ('Telfast Children''s Elixir', 'Telfast Children'),
+            ('Theratears Liquid', 'Theratears'),
+            ('Tinaderm Powder Spray', 'Tinaderm'),
+            ('Uniclar Aqueous', 'Uniclar'),
+            ('Vicks Cough Syrup', 'Vicks Cough'),
+            ('Vicks Cough Syrup for Chesty Coughs', 'Vicks Cough'),
+            ('Zarontin Syrup', 'Zarontin'),
+            ('Zeldox IM', 'Zeldox'),
+            ('Zithromax IV', 'Zithromax'),
+            ('Zyprexa IM', 'Zyprexa')
+     ) AS v (concept_name_old, concept_name_new)
+WHERE dcs.concept_name = v.concept_name_old;
+
 UPDATE dcs_bn
 SET concept_name=rtrim(substring(concept_name, '([^0-9]+)[0-9]?'), '-')
 WHERE concept_name LIKE '%/%'
   AND concept_name NOT LIKE '%Neutrogena%';
-
 UPDATE dcs_bn
 SET concept_name=replace(concept_name, '(Pfizer (Perth))', 'Pfizer');
 UPDATE dcs_bn
 SET concept_name=regexp_replace(concept_name, ' IM$| IV$', '', 'g');
-
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Paracetamol Infant Drops'
-WHERE CONCEPT_NAME = 'Paracetamol Infant''s Drops';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Panadol Children''s 5 to 12 Years'
-WHERE CONCEPT_NAME = 'Panadol Children''s 5 Years to 12 Years';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Panadol Children''s 1 to 5 Years'
-WHERE CONCEPT_NAME = 'Panadol Children''s Elixir 1 to 5 Years';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Panadol Children''s 5 to 12 Years'
-WHERE CONCEPT_NAME = 'Panadol Children''s Elixir 5 to 12 Years';
-
 UPDATE dcs_bn
 SET concept_name=regexp_replace(concept_name, '\(Day\)|\(Night\)|(Day and Night)$|(Day$)', '', 'g');
-
 UPDATE dcs_bn
 SET concept_name=trim(replace(regexp_replace(concept_name, '\d+|\.|%|\smg\s|\smg$|\sIU\s|\sIU$', '', 'g'), '  ', ' '))
 WHERE NOT concept_name ~ '-\d+'
   AND length(concept_name) > 3
-  AND concept_name NOT LIKE '%Years%'
-;
+  AND concept_name NOT LIKE '%Years%';
+
 UPDATE dcs_bn
 SET concept_name=trim(replace(concept_name, '  ', ' '));
 
 --the same names
 UPDATE DCS_BN
-SET CONCEPT_NAME = 'Friar''s Balsam'
+SET concept_name = 'Friar''s Balsam'
 WHERE CONCEPT_CODE IN ('696391000168106', '688371000168108');
 
 
@@ -336,7 +469,7 @@ WHERE lower(concept_name) IN (SELECT lower(Concept_name) FROM devv5.concept WHER
 
 --all kinds of compounds
 DELETE
-FROM DCS_BN
+FROM dcs_bn
 WHERE CONCEPT_CODE IN
       ('654241000168106', '770691000168104', '51957011000036109', '65048011000036101', '86596011000036106',
        '43151000168105', '60221000168109', '734591000168106', '59261000168100', '3637011000036108', '53153011000036106',
@@ -399,431 +532,45 @@ WHERE concept_name IN ('Alendronate with Colecalciferol',
                        'Zinc, Starch and Talc Dusting Powder APF',
                        'Zinc Paste APF');
 
-
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Abbocillin VK'
-WHERE CONCEPT_NAME = 'Abbocillin VK Filmtab';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Acnederm'
-WHERE CONCEPT_NAME = 'Acnederm Foaming Wash';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Actacode'
-WHERE CONCEPT_NAME = 'Actacode Linctus';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Allersoothe'
-WHERE CONCEPT_NAME = 'Allersoothe Elixir';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Amoxil'
-WHERE CONCEPT_NAME = 'Amoxil Paediatric Drops';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Avelox'
-WHERE CONCEPT_NAME = 'Avelox IV';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'B-Dose'
-WHERE CONCEPT_NAME = 'B-Dose IV';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Beconase'
-WHERE CONCEPT_NAME = 'Beconase Allergy and Hayfever Hour';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Benzac AC'
-WHERE CONCEPT_NAME = 'Benzac AC Wash';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Bepanthen'
-WHERE CONCEPT_NAME = 'Bepanthen Antiseptic';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Cepacol'
-WHERE CONCEPT_NAME = 'Cepacol Antibacterial';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Cepacol'
-WHERE CONCEPT_NAME = 'Cepacol Antibacterial Menthol and Eucalyptus';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Citanest Dental'
-WHERE CONCEPT_NAME = 'Citanest with Adrenaline in Dental';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Citanest Dental'
-WHERE CONCEPT_NAME = 'Citanest with Octapressin Dental';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Colifoam'
-WHERE CONCEPT_NAME = 'Colifoam Rectal Foam';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Coloxyl'
-WHERE CONCEPT_NAME = 'Coloxyl Drops';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Coloxyl'
-WHERE CONCEPT_NAME = 'Coloxyl with Senna';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Cordarone X'
-WHERE CONCEPT_NAME = 'Cordarone X Intravenous';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Daktarin'
-WHERE CONCEPT_NAME = 'Daktarin Tincture';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Demazin Cold Relief Paediatric'
-WHERE CONCEPT_NAME = 'Demazin Cold Relief Paediatric Oral Drops';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Demazin Cold Relief'
-WHERE CONCEPT_NAME = 'Demazin Cold Relief Syrup';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Demazin Paediatric'
-WHERE CONCEPT_NAME = 'Demazin Decongestant Paediatric';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Dermaveen'
-WHERE CONCEPT_NAME = 'Dermaveen Moisturising';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Dermaveen'
-WHERE CONCEPT_NAME = 'Dermaveen Shower & Bath Oil';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Dermaveen'
-WHERE CONCEPT_NAME = 'Dermaveen Soap Free Wash';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Dettol'
-WHERE CONCEPT_NAME = 'Dettol Antiseptic Cream';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Dettol'
-WHERE CONCEPT_NAME = 'Dettol Antiseptic Liquid';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Dettol'
-WHERE CONCEPT_NAME = 'Dettol Wound Wash';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Difflam'
-WHERE CONCEPT_NAME = 'Difflam Anaesthetic, Antibacterial and Anti-Inflammatory';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Difflam'
-WHERE CONCEPT_NAME = 'Difflam Anti-Inflammatory Lozenge';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Difflam'
-WHERE CONCEPT_NAME = 'Difflam Anti-Inflammatory Solution';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Difflam'
-WHERE CONCEPT_NAME = 'Difflam Anti-Inflammatory Throat';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Difflam'
-WHERE CONCEPT_NAME = 'Difflam Cough Lozenge';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Difflam Exrta Strength'
-WHERE CONCEPT_NAME = 'Difflam Extra Strength';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Difflam'
-WHERE CONCEPT_NAME = 'Difflam Lozenge';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Difflam'
-WHERE CONCEPT_NAME = 'Difflam Mouth';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Difflam'
-WHERE CONCEPT_NAME = 'Difflam Sore Throat Gargle with Iodine Concentrate';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Difflam-C'
-WHERE CONCEPT_NAME = 'Difflam-C Anti-Inflammatory Antiseptic';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Dimetapp Chesty Cough'
-WHERE CONCEPT_NAME = 'Dimetapp Chesty Cough Elixir';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Dimetapp Cold and Allergy'
-WHERE CONCEPT_NAME = 'Dimetapp Cold and Allergy Elixir';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Dimetapp Cold and Allergy Extra Strength'
-WHERE CONCEPT_NAME = 'Dimetapp Cold and Allergy Extra Strength Drops';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Dimetapp Cold and Flu Day Relief'
-WHERE CONCEPT_NAME = 'Dimetapp Cold and Flu Day Relief Liquid Cap';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Dimetapp Cold and Flu Night Relief'
-WHERE CONCEPT_NAME = 'Dimetapp Cold and Flu Night Relief Liquid Cap';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Dimetapp DM Cough and Cold'
-WHERE CONCEPT_NAME = 'Dimetapp DM Cough and Cold Drops';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Dimetapp DM Cough and Cold'
-WHERE CONCEPT_NAME = 'Dimetapp DM Cough and Cold Elixir';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Donnalix Infant'
-WHERE CONCEPT_NAME = 'Donnalix Infant Drops';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Drixine'
-WHERE CONCEPT_NAME = 'Drixine Decongestant';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Drixine'
-WHERE CONCEPT_NAME = 'Drixine Metered Pump Decongestant';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Dry Tickly Cough'
-WHERE CONCEPT_NAME = 'Dry Tickly Cough Medicine';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Dry Tickly Cough'
-WHERE CONCEPT_NAME = 'Dry Tickly Cough Mixture';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Dulcolax SP'
-WHERE CONCEPT_NAME = 'Dulcolax SP Drops';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Duro-Tuss Chesty Cough Forte'
-WHERE CONCEPT_NAME = 'Duro-Tuss Chesty Cough Liquid Forte';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Duro-Tuss Chesty Cough plus Nasal Decongestant'
-WHERE CONCEPT_NAME = 'Duro-Tuss Chesty Cough Liquid plus Nasal Decongestant';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Duro-Tuss Chesty Cough'
-WHERE CONCEPT_NAME = 'Duro-Tuss Chesty Cough Liquid Regular';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Duro-Tuss Chesty Cough'
-WHERE CONCEPT_NAME = 'Duro-Tuss Chesty Cough Lozenge';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Duro-Tuss Cough'
-WHERE CONCEPT_NAME = 'Duro-Tuss Cough Liquid Expectorant';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Duro-Tuss Dry Cough plus Nasal Decongestant'
-WHERE CONCEPT_NAME = 'Duro-Tuss Dry Cough Liquid plus Nasal Decongestant';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Duro-Tuss Dry Cough'
-WHERE CONCEPT_NAME = 'Duro-Tuss Dry Cough Liquid Regular';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Duro-Tuss Dry Cough'
-WHERE CONCEPT_NAME = 'Duro-Tuss Dry Cough Lozenge';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Emend'
-WHERE CONCEPT_NAME = 'Emend IV';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Epilim'
-WHERE CONCEPT_NAME = 'Epilim Syrup';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Eulactol'
-WHERE CONCEPT_NAME = 'Eulactol Antifungal';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Febridol Infant'
-WHERE CONCEPT_NAME = 'Febridol Infant Drops';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Fludara'
-WHERE CONCEPT_NAME = 'Fludara IV';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Fucidin'
-WHERE CONCEPT_NAME = 'Fucidin IV';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Idaprex'
-WHERE CONCEPT_NAME = 'Idaprex Arg';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Imodium'
-WHERE CONCEPT_NAME = 'Imodium Caplet';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Imogam'
-WHERE CONCEPT_NAME = 'Imogam Rabies Pasteurised';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Lanoxin Paediatric'
-WHERE CONCEPT_NAME = 'Lanoxin Paediatric Elixir';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Lemsip Cold and Flu'
-WHERE CONCEPT_NAME = 'Lemsip Cold and Flu Liquid Capsule';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Lorastyne'
-WHERE CONCEPT_NAME = 'Lorastyne Syrup';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Lucrin Depot'
-WHERE CONCEPT_NAME = 'Lucrin Depot -Month';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Marcain Spinal'
-WHERE CONCEPT_NAME = 'Marcain Spinal Heavy';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Marcain Dental'
-WHERE CONCEPT_NAME = 'Marcain with Adrenaline in Dental';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Merieux'
-WHERE CONCEPT_NAME = 'Merieux Inactivated Rabies Vaccine';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Mersyndol'
-WHERE CONCEPT_NAME = 'Mersyndol Caplet';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'MS Contin'
-WHERE CONCEPT_NAME = 'MS Contin Suspension';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Mycil Healthy Feet Tinea'
-WHERE CONCEPT_NAME = 'Mycil Healthy Feet Tinea Cream';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Mycil Healthy Feet Tinea'
-WHERE CONCEPT_NAME = 'Mycil Healthy Feet Tinea Powder';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Nasonex'
-WHERE CONCEPT_NAME = 'Nasonex Aqueous';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Neutrogena T/Gel Therapeutic Plus'
-WHERE CONCEPT_NAME = 'Neutrogena T/Gel Therapeutic Plus Shampoo';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Neutrogena T/Gel Therapeutic'
-WHERE CONCEPT_NAME = 'Neutrogena T/Gel Therapeutic Shampoo';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Nexium HP'
-WHERE CONCEPT_NAME = 'Nexium Hp';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Nexium'
-WHERE CONCEPT_NAME = 'Nexium IV';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Nucosef'
-WHERE CONCEPT_NAME = 'Nucosef Syrup';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Nupentin'
-WHERE CONCEPT_NAME = 'Nupentin Tab';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Nurocain Dental'
-WHERE CONCEPT_NAME = 'Nurocain with Adrenaline in Dental';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Nurofen'
-WHERE CONCEPT_NAME = 'Nurofen Caplet';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Nurofen'
-WHERE CONCEPT_NAME = 'Nurofen Liquid Capsule';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Nurofen Zavance'
-WHERE CONCEPT_NAME = 'Nurofen Zavance Liquid Capsule';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Panadol'
-WHERE CONCEPT_NAME = 'Panadol Caplet';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Panadol Optizorb'
-WHERE CONCEPT_NAME = 'Panadol Caplet Optizorb';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Panadol Gel'
-WHERE CONCEPT_NAME = 'Panadol Gel Cap';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Panadol Gel'
-WHERE CONCEPT_NAME = 'Panadol Gel Tab';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Panadol'
-WHERE CONCEPT_NAME = 'Panadol Mini Cap';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Panadol Sinus PE Night and Day'
-WHERE CONCEPT_NAME = 'Panadol Sinus PE Night and Day Caplet';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Panafen IB'
-WHERE CONCEPT_NAME = 'Panafen IB Mini Cap';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Paracetamol Children''s'
-WHERE CONCEPT_NAME = 'Paracetamol Children''s Drops';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Paracetamol Children''s 1 Month to 2 Years'
-WHERE CONCEPT_NAME = 'Paracetamol Children''s Drops 1 Month to 2 Years';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Paracetamol Children''s 1 to 5 Years'
-WHERE CONCEPT_NAME = 'Paracetamol Children''s Elixir 1 to 5 Years';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Paracetamol Children''s 5 to 12 Years'
-WHERE CONCEPT_NAME = 'Paracetamol Children''s Elixir 5 to 12 Years';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Paracetamol Children''s 1 Month to 2 Years'
-WHERE CONCEPT_NAME = 'Paracetamol Children''s Infant Drops 1 Month to 2 Years';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Paracetamol Children''s 1 to 5 Years'
-WHERE CONCEPT_NAME = 'Paracetamol Children''s Syrup 1 to 5 Years';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Paracetamol Infant and Children 1 Month to 2 Years'
-WHERE CONCEPT_NAME = 'Paracetamol Drops Infants and Children 1 Month to 2 Years';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Paracetamol Extra'
-WHERE CONCEPT_NAME = 'Paracetamol Extra Tabsule';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Paracetamol Infant and Children 1 Month to 4 Years'
-WHERE CONCEPT_NAME = 'Paracetamol Infant and Children''s Drops 1 Month to 4 Years';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Paracetamol Infant'
-WHERE CONCEPT_NAME = 'Paracetamol Infant Drops';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Paracetamol Pain and Fever 1 Month to 2 Years'
-WHERE CONCEPT_NAME = 'Paracetamol Pain and Fever Drops 1 Month to 2 Years';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Paralgin'
-WHERE CONCEPT_NAME = 'Paralgin Tabsule';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Penta-vite'
-WHERE CONCEPT_NAME = 'Penta-vite Multivitamins with Iron for Kids 1 to 12 Years';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Pholtrate'
-WHERE CONCEPT_NAME = 'Pholtrate Linctus';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Polaramine'
-WHERE CONCEPT_NAME = 'Polaramine Syrup';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Prefrin'
-WHERE CONCEPT_NAME = 'Prefrin Liquifilm';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Proctosedyl'
-WHERE CONCEPT_NAME = 'Proctosedyl Rectal';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Rhinocort'
-WHERE CONCEPT_NAME = 'Rhinocort Aqueous';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Rynacrom'
-WHERE CONCEPT_NAME = 'Rynacrom Metered Dose';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Sandoglobulin NF'
-WHERE CONCEPT_NAME = 'Sandoglobulin NF Liquid';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Savlon'
-WHERE CONCEPT_NAME = 'Savlon Antiseptic Powder';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Telfast Children'
-WHERE CONCEPT_NAME = 'Telfast Children''s Elixir';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Theratears'
-WHERE CONCEPT_NAME = 'Theratears Liquid';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Tinaderm'
-WHERE CONCEPT_NAME = 'Tinaderm Powder Spray';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Uniclar'
-WHERE CONCEPT_NAME = 'Uniclar Aqueous';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Vicks Cough'
-WHERE CONCEPT_NAME = 'Vicks Cough Syrup';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Vicks Cough'
-WHERE CONCEPT_NAME = 'Vicks Cough Syrup for Chesty Coughs';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Zarontin'
-WHERE CONCEPT_NAME = 'Zarontin Syrup';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Zeldox'
-WHERE CONCEPT_NAME = 'Zeldox IM';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Zithromax'
-WHERE CONCEPT_NAME = 'Zithromax IV';
-UPDATE DCS_BN
-SET CONCEPT_NAME = 'Zyprexa'
-WHERE CONCEPT_NAME = 'Zyprexa IM';
-
 TRUNCATE TABLE drug_concept_stage;
-INSERT INTO drug_concept_stage (CONCEPT_NAME, VOCABULARY_ID, CONCEPT_CLASS_ID, STANDARD_CONCEPT, CONCEPT_CODE,
-                                POSSIBLE_EXCIPIENT, domain_id, VALID_START_DATE, VALID_END_DATE, INVALID_REASON,
-                                SOURCE_CONCEPT_CLASS_ID)
-SELECT CONCEPT_NAME, 'AMT', NEW_CONCEPT_CLASS_ID, NULL, CONCEPT_CODE, NULL, 'Drug',
+INSERT INTO drug_concept_stage (concept_name, vocabulary_id, concept_class_id, standard_concept, concept_code,
+                                possible_excipient, domain_id, valid_start_date, valid_end_date, invalid_reason,
+                                source_concept_class_id)
+SELECT concept_name, 'AMT', NEW_CONCEPT_CLASS_ID, NULL, CONCEPT_CODE, NULL, 'Drug',
        TO_DATE('20161101', 'yyyymmdd') AS valid_start_date, TO_DATE('20991231', 'yyyymmdd') AS valid_end_date, NULL,
        CONCEPT_CLASS_ID
 FROM (
-     SELECT CONCEPT_NAME, 'Ingredient' AS NEW_CONCEPT_CLASS_ID, CONCEPT_CODE, CONCEPT_CLASS_ID
+     SELECT concept_name, 'Ingredient' AS NEW_CONCEPT_CLASS_ID, CONCEPT_CODE, CONCEPT_CLASS_ID
      FROM concept_stage_sn
      WHERE CONCEPT_CLASS_ID = 'AU Substance'
        AND concept_code NOT IN ('52990011000036102', '48158011000036109')-- Aqueous Cream ,Cotton Wool
      UNION
-     SELECT CONCEPT_NAME, 'Brand Name' AS NEW_CONCEPT_CLASS_ID, CONCEPT_CODE, CONCEPT_CLASS_ID
+     SELECT concept_name, 'Brand Name' AS NEW_CONCEPT_CLASS_ID, CONCEPT_CODE, CONCEPT_CLASS_ID
      FROM dcs_bn
      UNION
-     SELECT CONCEPT_NAME, NEW_CONCEPT_CLASS_ID, CONCEPT_CODE, CONCEPT_CLASS_ID
+     SELECT concept_name, NEW_CONCEPT_CLASS_ID, CONCEPT_CODE, CONCEPT_CLASS_ID
      FROM form
      UNION
      SELECT supplier, 'Supplier', concept_code, ''
      FROM supplier_2
      UNION
-     SELECT CONCEPT_NAME, NEW_CONCEPT_CLASS_ID, initcap(CONCEPT_NAME), CONCEPT_CLASS_ID
+     SELECT concept_name, NEW_CONCEPT_CLASS_ID, initcap(concept_name), CONCEPT_CLASS_ID
      FROM unit
      UNION
-     SELECT CONCEPT_NAME, 'Drug Product', CONCEPT_CODE, CONCEPT_CLASS_ID
+     SELECT concept_name, 'Drug Product', CONCEPT_CODE, CONCEPT_CLASS_ID
      FROM concept_stage_sn
      WHERE CONCEPT_CLASS_ID IN
            ('Containered Pack', 'Med Product Pack', 'Trade Product Pack', 'Med Product Unit', 'Trade Product Unit')
-       AND CONCEPT_NAME NOT LIKE '%(&)%'
+       AND concept_name NOT LIKE '%(&)%'
        AND (SELECT count(*) FROM regexp_matches(concept_name, '\sx\s', 'g')) <= 1
        AND concept_name NOT LIKE '%Trisequens, 28%'--exclude packs
      UNION
-     SELECT concat(substr(CONCEPT_NAME, 1, 242), ' [Drug Pack]') AS concept_name, 'Drug Product', CONCEPT_CODE,
+     SELECT concat(substr(concept_name, 1, 242), ' [Drug Pack]') AS concept_name, 'Drug Product', CONCEPT_CODE,
             CONCEPT_CLASS_ID
      FROM concept_stage_sn
      WHERE CONCEPT_CLASS_ID IN
            ('Containered Pack', 'Med Product Pack', 'Trade Product Pack', 'Med Product Unit', 'Trade Product Unit')
-       AND (CONCEPT_NAME LIKE '%(&)%' OR (SELECT count(*) FROM regexp_matches(concept_name, '\sx\s', 'g')) > 1 OR
+       AND (concept_name LIKE '%(&)%' OR (SELECT count(*) FROM regexp_matches(concept_name, '\sx\s', 'g')) > 1 OR
             concept_name LIKE '%Trisequens, 28%')
      ) AS s0;
 
@@ -831,10 +578,10 @@ DELETE
 FROM DRUG_CONCEPT_STAGE
 WHERE CONCEPT_CODE IN (SELECT CONCEPT_CODE FROM non_drug);
 
-INSERT INTO drug_concept_stage (CONCEPT_NAME, VOCABULARY_ID, CONCEPT_CLASS_ID, STANDARD_CONCEPT, CONCEPT_CODE,
+INSERT INTO drug_concept_stage (concept_name, VOCABULARY_ID, CONCEPT_CLASS_ID, STANDARD_CONCEPT, CONCEPT_CODE,
                                 POSSIBLE_EXCIPIENT, domain_id, VALID_START_DATE, VALID_END_DATE, INVALID_REASON,
                                 SOURCE_CONCEPT_CLASS_ID)
-SELECT DISTINCT CONCEPT_NAME, 'AMT', 'Device', 'S', CONCEPT_CODE, NULL, 'Device',
+SELECT DISTINCT concept_name, 'AMT', 'Device', 'S', CONCEPT_CODE, NULL, 'Device',
                 TO_DATE('20161101', 'yyyymmdd') AS valid_start_date, TO_DATE('20991231', 'yyyymmdd') AS valid_end_date,
                 NULL, CONCEPT_CLASS_ID
 FROM non_drug

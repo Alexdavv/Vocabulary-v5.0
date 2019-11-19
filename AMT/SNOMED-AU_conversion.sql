@@ -1,20 +1,7 @@
-DO
-$_$
-    BEGIN
-        PERFORM VOCABULARY_PACK.SetLatestUpdate(
-                        pVocabularyName => 'AMT',
-                        pVocabularyDate => (SELECT vocabulary_date FROM sources.product LIMIT 1),
-                        pVocabularyVersion => (SELECT vocabulary_version FROM sources.product LIMIT 1),
-                        pVocabularyDevSchema => 'DEV_AMT'
-                    );
-
-    END
-$_$;
-
-DROP TABLE IF EXISTS CONCEPT_STAGE_SN;
-CREATE TABLE CONCEPT_STAGE_SN
+DROP TABLE IF EXISTS concept_stage_sn;
+CREATE TABLE concept_stage_sn
 (
-    LIKE CONCEPT_STAGE
+    LIKE concept_stage
 );
 
 --1. Create core version of SNOMED without concept_id, domain_id, concept_class_id, standard_concept

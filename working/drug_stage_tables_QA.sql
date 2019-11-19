@@ -756,7 +756,7 @@ FROM (
 			JOIN internal_relationship_stage i ON concept_code_1 = drug_concept_code
 			JOIN drug_concept_stage ON concept_code = concept_code_2
 				AND concept_class_id = 'Dose Form'
-			WHERE box_size IS NOT NULL
+			WHERE ds.box_size IS NOT NULL
 			)
 		AND box_size IS NOT NULL
 	
