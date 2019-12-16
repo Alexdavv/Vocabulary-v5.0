@@ -1,7 +1,13 @@
+DROP TABLE IF EXISTS ingredient_mm;
+
 CREATE TABLE IF NOT EXISTS ingredient_mm
 (
-    name                 varchar(255),
+    name                 varchar(255) NOT NULL,
+    constraint chk_name
+            check ((name)::text <> ''::text),
     new_name             varchar(255),
+    constraint chk_new_name
+            check ((new_name)::text <> ''::text),
     comment              varchar(255),
     precedence           int,
     target_concept_id    int,
@@ -12,9 +18,34 @@ CREATE TABLE IF NOT EXISTS ingredient_mm
     invalid_reason       varchar(20),
     domain_id            varchar(20),
     target_vocabulary_id varchar(20)
-);
+) WITH OIDS;
 
-TRUNCATE TABLE ingredient_mm;
+--todo check mm mapping consistancy (target id-name, if >1 string group by name precedence should be filled), such a name is not in the _mapped table;
+
+--check if target concepts exist in the concept table
+SELECT *
+FROM ingredient_mm j1
+WHERE NOT EXISTS (  SELECT *
+                    FROM ingredient_mm j2
+                    JOIN concept c
+                        ON j2.target_concept_id = c.concept_id
+                            AND c.concept_name = j2.concept_name
+                            AND c.vocabulary_id = j2.target_vocabulary_id
+                            AND c.domain_id = j2.domain_id
+                            AND c.standard_concept = 'S'
+                            AND c.invalid_reason is NULL
+                    WHERE j1.OID = j2.OID
+                  )
+    AND target_concept_id NOT IN (0, 17)
+    AND target_concept_id IS NOT NULL
+;
+
+
+
+
+
+
+
 
 CREATE TEMP TABLE non_drug_ingredients AS
 SELECT dcs2.concept_code
@@ -72,30 +103,35 @@ WHERE drug_concept_code IN (
                            SELECT *
                            FROM non_drug_ingredients
                            );
+SELECT * FROM ingredient_mm;
 
 -- insert ingredients into ingredient_mapped from manual_mapping
 INSERT INTO ingredient_mapped (name, new_name, concept_id_2, precedence, mapping_type)
-SELECT
+SELECT DISTINCT
     name,
     new_name,
     target_concept_id,
-    coalesce(precedence, row_number() OVER (PARTITION BY name)),
+    coalesce(precedence, 1),
     'manual_mapping'
 FROM ingredient_mm
-WHERE target_concept_id IS NOT NULL
-  AND target_concept_id NOT IN (17, 0);
+--WHERE target_concept_id IS NOT NULL
+--  AND target_concept_id NOT IN (17, 0)
+;
+
 
 -- update drug_concept_stage (set new_names, set standard_concepts)
 -- -- set new_names
 UPDATE drug_concept_stage dcs
-SET concept_name = subquery.new_name
+SET concept_name = names.new_name
 FROM (
-     SELECT new_name, name
-     FROM ingredient_mm
-     WHERE new_name <> ''
-     ) AS subquery
-WHERE dcs.concept_name = subquery.name;
+     SELECT name, new_name
+     FROM ingredient_mapped
+     WHERE new_name IS NOT NULL
+     ) AS names
+WHERE dcs.concept_name = names.name
+;
 
+--todo delete
 -- -- set standard concepts ???
 -- -- -- set NULL for all standard concepts for multiple ingredients in manual mapping
 WITH to_be_updated AS (
